@@ -1291,6 +1291,11 @@ extension Defaults.Keys {
     
     // MARK: Lyrics Feature
     static let enableLyrics = Key<Bool>("enableLyrics", default: false)
+    static let showLyricsInClosedNotch = Key<Bool>("showLyricsInClosedNotch", default: false)
+    static let lyricSyncOffset = Key<Double>("lyricSyncOffset", default: 0)
+    static let lyricTopSpacing = Key<Double>("lyricTopSpacing", default: -3)
+    static let lyricBottomSpacing = Key<Double>("lyricBottomSpacing", default: 7)
+    static let lyricFontSize = Key<Double>("lyricFontSize", default: 11)
     static let showLiveCanvasInDynamicIsland = Key<Bool>("showLiveCanvasInDynamicIsland", default: false)
     
     // MARK: Notes Feature

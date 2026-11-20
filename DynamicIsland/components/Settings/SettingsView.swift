@@ -780,6 +780,7 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .media, title: "Skip buttons", keywords: ["skip", "controls", "±10"], highlightID: SettingsTab.media.highlightID(for: "Skip buttons")),
             SettingsSearchEntry(tab: .media, title: "Sneak Peek Style", keywords: ["sneak peek", "preview"], highlightID: SettingsTab.media.highlightID(for: "Sneak Peek Style")),
             SettingsSearchEntry(tab: .media, title: "Enable lyrics", keywords: ["lyrics", "song text"], highlightID: SettingsTab.media.highlightID(for: "Enable lyrics")),
+            SettingsSearchEntry(tab: .media, title: "Show lyrics under closed notch", keywords: ["lyrics", "closed notch", "karaoke"], highlightID: SettingsTab.media.highlightID(for: "Show lyrics under closed notch")),
             SettingsSearchEntry(tab: .media, title: "Show live canvas in Dynamic Island", keywords: ["canvas", "live canvas", "album art", "dynamic island", "spotify canvas"], highlightID: SettingsTab.media.highlightID(for: "Show live canvas in Dynamic Island")),
             SettingsSearchEntry(tab: .media, title: "Auto-hide inactive notch media player", keywords: ["auto hide", "inactive", "placeholder", "notch media"], highlightID: SettingsTab.media.highlightID(for: "Auto-hide inactive notch media player")),
             SettingsSearchEntry(tab: .media, title: "Show Change Media Output control", keywords: ["airplay", "route picker", "media output"], highlightID: SettingsTab.media.highlightID(for: "Show Change Media Output control")),
@@ -2773,8 +2774,12 @@ struct Media: View {
     @Default(.enableWaveformScrubber) private var enableWaveformScrubber
     @Default(.colorExtractionMode) private var colorExtractionMode
     @Default(.parallaxEffectIntensity) private var parallaxEffectIntensity
+    @Default(.showLyricsInClosedNotch) private var showLyricsInClosedNotch
+    @Default(.lyricSyncOffset) private var lyricSyncOffset
+    @Default(.lyricTopSpacing) private var lyricTopSpacing
+    @Default(.lyricBottomSpacing) private var lyricBottomSpacing
+    @Default(.lyricFontSize) private var lyricFontSize
 
-    
     @ObservedObject private var musicManager = MusicManager.shared
 
     private var isAppleMusicActive: Bool {
@@ -2783,6 +2788,24 @@ struct Media: View {
 
     private func highlightID(_ title: String) -> String {
         SettingsTab.media.highlightID(for: title)
+    }
+
+    private func lyricSlider(
+        _ title: String,
+        value: Binding<Double>,
+        in range: ClosedRange<Double>,
+        step: Double,
+        valueText: String
+    ) -> some View {
+        Slider(value: value, in: range, step: step) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(valueText)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+        }
     }
 
     private var standardControlsSuppressed: Bool {
@@ -2928,6 +2951,47 @@ struct Media: View {
                     Text("Enable lyrics")
                 }
                 .settingsHighlight(id: highlightID("Enable lyrics"))
+                Defaults.Toggle(key: .showLyricsInClosedNotch) {
+                    HStack {
+                        Text("Show lyrics under closed notch")
+                        customBadge(text: "Beta")
+                    }
+                }
+                .settingsHighlight(id: highlightID("Show lyrics under closed notch"))
+                Group {
+                    lyricSlider(
+                        "Lyric timing offset",
+                        value: $lyricSyncOffset,
+                        in: -1.0...1.0,
+                        step: 0.05,
+                        valueText: String(format: "%+.2f s", abs(lyricSyncOffset) < 0.005 ? 0 : lyricSyncOffset)
+                    )
+                    lyricSlider(
+                        "Space above lyrics",
+                        value: $lyricTopSpacing,
+                        in: -8...8,
+                        step: 1,
+                        valueText: String(format: "%.0f pt", abs(lyricTopSpacing) < 0.5 ? 0 : lyricTopSpacing)
+                    )
+                    lyricSlider(
+                        "Space below lyrics",
+                        value: $lyricBottomSpacing,
+                        in: 2...16,
+                        step: 1,
+                        valueText: String(format: "%.0f pt", lyricBottomSpacing)
+                    )
+                    lyricSlider(
+                        "Lyric font size",
+                        value: $lyricFontSize,
+                        in: 9...14,
+                        step: 0.5,
+                        valueText: String(format: "%.1f pt", lyricFontSize)
+                    )
+                    Button("Reset lyric display") {
+                        Defaults.reset(.lyricSyncOffset, .lyricTopSpacing, .lyricBottomSpacing, .lyricFontSize)
+                    }
+                }
+                .disabled(!showLyricsInClosedNotch)
                 Defaults.Toggle(key: .showLiveCanvasInDynamicIsland) {
                     Text("Show live canvas in Dynamic Island")
                 }

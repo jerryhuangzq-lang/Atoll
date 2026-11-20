@@ -48,7 +48,8 @@ class DynamicIslandWindow: NSPanel {
             .fullScreenAuxiliary,
             .canJoinAllSpaces,
             .ignoresCycle,
-            .stationary,
+            // .transient lets Mission Control hide the island; .stationary would keep it on screen.
+            .transient,
         ]
         
         isReleasedWhenClosed = false

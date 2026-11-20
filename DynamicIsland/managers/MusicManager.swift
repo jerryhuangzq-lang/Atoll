@@ -506,7 +506,17 @@ class MusicManager: ObservableObject {
 
     // MARK: - Lyrics Properties
     @Published var currentLyrics: String = ""
-    @Published var syncedLyrics: [LyricLine] = []
+    @Published var syncedLyrics: [LyricLine] = [] {
+        didSet {
+            lyricLineTimings = hasTimedLyrics ? LyricTiming.lineTimings(for: syncedLyrics) : []
+        }
+    }
+    private(set) var lyricLineTimings: [LyricLineTiming] = []
+
+    /// Plain (untimed) lyrics are stored as one line at 0 s; only real LRC results count.
+    var hasTimedLyrics: Bool {
+        !syncedLyrics.isEmpty && !(syncedLyrics.count == 1 && syncedLyrics[0].timestamp == 0)
+    }
     @Published var showLyrics: Bool = false
     @Published var currentLyricIndex: Int = -1
 
@@ -1579,36 +1589,56 @@ class MusicManager: ObservableObject {
         }
     }
 
+    private static let lrcTagRegex = try? NSRegularExpression(
+        pattern: "\\[(\\d+):(\\d{2})(?:\\.(\\d{1,3}))?\\]",
+        options: []
+    )
+
     private func parseLRC(_ lrc: String) -> [LyricLine] {
+        guard let regex = Self.lrcTagRegex else { return [] }
         let lines = lrc.components(separatedBy: .newlines)
         var lyrics: [LyricLine] = []
 
-        // Accept patterns like [m:ss], [mm:ss], [mm:ss.xx] where centiseconds are optional
-        let pattern = "\\[(\\d{1,2}):(\\d{2})(?:\\.(\\d{1,2}))?\\]"
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return [] }
-
-        for line in lines {
+        for rawLine in lines {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard line.hasPrefix("[") else { continue }
             let nsLine = line as NSString
             let fullRange = NSRange(location: 0, length: nsLine.length)
-            if let match = regex.firstMatch(in: line, options: [], range: fullRange) {
-                let minRange = match.range(at: 1)
-                let secRange = match.range(at: 2)
-                let centiRange = match.range(at: 3)
+            // A line may carry several leading tags: [00:12.00][00:45.00]text repeats at both times.
+            let allMatches = regex.matches(in: line, options: [], range: fullRange)
+            var tagMatches: [NSTextCheckingResult] = []
+            for candidate in allMatches {
+                if let previous = tagMatches.last {
+                    let gapStart = previous.range.location + previous.range.length
+                    let gapLength = candidate.range.location - gapStart
+                    if gapLength > 0 {
+                        let gap = nsLine.substring(with: NSRange(location: gapStart, length: gapLength))
+                        if !gap.trimmingCharacters(in: .whitespaces).isEmpty { break }
+                    }
+                }
+                tagMatches.append(candidate)
+            }
+            if let lastTag = tagMatches.last {
+                let timestamps = tagMatches.map { match -> TimeInterval in
+                    let minRange = match.range(at: 1)
+                    let secRange = match.range(at: 2)
+                    let fracRange = match.range(at: 3)
 
-                let minStr = minRange.location != NSNotFound ? nsLine.substring(with: minRange) : "0"
-                let secStr = secRange.location != NSNotFound ? nsLine.substring(with: secRange) : "0"
-                let centiStr = (centiRange.location != NSNotFound) ? nsLine.substring(with: centiRange) : "0"
+                    let minStr = minRange.location != NSNotFound ? nsLine.substring(with: minRange) : "0"
+                    let secStr = secRange.location != NSNotFound ? nsLine.substring(with: secRange) : "0"
+                    let fracStr = fracRange.location != NSNotFound ? nsLine.substring(with: fracRange) : "0"
 
-                let minutes = Double(minStr) ?? 0
-                let seconds = Double(secStr) ?? 0
-                let centis = Double(centiStr) ?? 0
-                let timestamp = minutes * 60 + seconds + centis / 100.0
+                    let minutes = Double(minStr) ?? 0
+                    let seconds = Double(secStr) ?? 0
+                    // Fraction digits: [mm:ss.5] is half a second, not 50 ms.
+                    return minutes * 60 + seconds + (Double("0." + fracStr) ?? 0)
+                }
 
-                let textStart = match.range.location + match.range.length
+                let textStart = lastTag.range.location + lastTag.range.length
                 if textStart <= nsLine.length {
                     let text = nsLine.substring(from: textStart).trimmingCharacters(in: .whitespaces)
                     if !text.isEmpty {
-                        lyrics.append(LyricLine(timestamp: timestamp, text: text))
+                        lyrics.append(contentsOf: timestamps.map { LyricLine(timestamp: $0, text: text) })
                     }
                 }
             }

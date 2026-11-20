@@ -79,6 +79,9 @@ struct ContentView: View {
     @Default(.showDoNotDisturbIndicator) var showDoNotDisturbIndicator
     @Default(.enableScreenRecordingDetection) var enableScreenRecordingDetection
     @Default(.enableCapsLockIndicator) var enableCapsLockIndicator
+    @Default(.showLyricsInClosedNotch) var showLyricsInClosedNotch
+    @Default(.lyricTopSpacing) var lyricTopSpacing
+    @Default(.lyricBottomSpacing) var lyricBottomSpacing
     @Default(.enableExtensionLiveActivities) var enableExtensionLiveActivities
     @Default(.showStandardMediaControls) var showStandardMediaControls
     @Default(.externalDisplayStyle) var externalDisplayStyle
@@ -337,6 +340,19 @@ struct ContentView: View {
             && !vm.hideOnClosed
             && !lockScreenManager.isLocked
             && !isMusicHUDDeferredAfterUnlock
+    }
+
+    // Mirrors the closed-notch branch order: battery, HUD and caps-lock activities outrank music.
+    private var shouldShowClosedNotchLyrics: Bool {
+        showLyricsInClosedNotch
+            && !coordinator.firstLaunch
+            && musicManager.isPlaying
+            && musicManager.hasTimedLyrics
+            && !(shouldHideUntilHover && !isHovering)
+            && closedMusicPairingEligible(hasActiveMusicSnapshot: true)
+            && !isCurrentScreenExpansionVisible
+            && !isSneakPeekVisibleOnCurrentScreen
+            && !(capsLockManager.isCapsLockActive && enableCapsLockIndicator)
     }
 
     private var closedLiveActivitySwapTransition: AnyTransition {
@@ -1070,12 +1086,18 @@ struct ContentView: View {
                               }
                           }
                       }
+                      if shouldShowClosedNotchLyrics {
+                          ClosedNotchLyricRow(musicManager: musicManager)
+                              .padding(.top, CGFloat(lyricTopSpacing))
+                              .padding(.bottom, CGFloat(lyricBottomSpacing))
+                      }
                   }
               }
               .conditionalModifier(shouldFixSizeForSneakPeek()) { view in
                   view
                       .fixedSize()
               }
+              .fixedSize(horizontal: shouldShowClosedNotchLyrics, vertical: shouldShowClosedNotchLyrics)
               .zIndex(2)
               
               ZStack {
